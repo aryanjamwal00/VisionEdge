@@ -7,10 +7,10 @@
     android:background="#002B36">
 
     <TextView
-        android:id="@+id/statusText"
+        android:id="@+id/sample_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="VisionEdge initialized"
+        android:text="VisionEdge native module initialized"
         android:textColor="#FFFFFF"
         android:textSize="18sp"
         android:textStyle="bold"
