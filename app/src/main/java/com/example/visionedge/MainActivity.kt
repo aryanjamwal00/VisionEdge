@@ -2,19 +2,22 @@ package com.example.visionedge
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
-import android.hardware.camera2.*
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
 import android.os.Bundle
 import android.util.Log
 import android.view.Surface
 import android.view.TextureView
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import android.graphics.Bitmap
-
 
 class MainActivity : AppCompatActivity() {
 
@@ -23,13 +26,24 @@ class MainActivity : AppCompatActivity() {
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
 
-    external fun processFrameJNI(data: ByteArray, width: Int, height: Int): ByteArray
+    private var currentFilter = Filter.EDGE
+
+    // JNI: native function implemented in C++
+    external fun processFrameJNI(
+        data: ByteArray,
+        width: Int,
+        height: Int,
+        mode: Int
+    ): ByteArray
+
+    enum class Filter { ORIGINAL, GRAY, EDGE }
 
     companion object {
         init {
-            // ⚠️ Library name must match CMake target (usually "native-lib")
+            // Must match CMake project's target name: "visionedge"
             System.loadLibrary("visionedge")
         }
+
         private const val CAMERA_REQUEST = 101
         private const val TAG = "VisionEdge"
     }
@@ -41,6 +55,17 @@ class MainActivity : AppCompatActivity() {
 
         textureView = findViewById(R.id.textureView)
         processedImage = findViewById(R.id.processedImage)
+
+        // Filter buttons
+        findViewById<Button>(R.id.btnOriginal).setOnClickListener {
+            currentFilter = Filter.ORIGINAL
+        }
+        findViewById<Button>(R.id.btnGray).setOnClickListener {
+            currentFilter = Filter.GRAY
+        }
+        findViewById<Button>(R.id.btnEdge).setOnClickListener {
+            currentFilter = Filter.EDGE
+        }
 
         if (!::textureView.isInitialized) {
             Toast.makeText(this, "textureView not found in layout!", Toast.LENGTH_LONG).show()
@@ -80,7 +105,8 @@ class MainActivity : AppCompatActivity() {
                 surface: SurfaceTexture,
                 width: Int,
                 height: Int
-            ) {}
+            ) {
+            }
 
             override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
                 Log.d(TAG, "SurfaceTexture destroyed")
@@ -88,29 +114,39 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-                // Grab current frame as Bitmap
+                // Get current frame as Bitmap
                 val bitmap = textureView.bitmap ?: return
+
+                // If ORIGINAL filter, just show the camera frame
+                if (currentFilter == Filter.ORIGINAL) {
+                    processedImage.setImageBitmap(bitmap)
+                    return
+                }
 
                 val width = bitmap.width
                 val height = bitmap.height
 
-                // Allocate byte buffer for ARGB_8888
+                // Convert Bitmap (ARGB_8888) to byte array
                 val bufferSize = width * height * 4
                 val buffer = java.nio.ByteBuffer.allocate(bufferSize)
                 bitmap.copyPixelsToBuffer(buffer)
                 val inputBytes = buffer.array()
 
-                // Call native processing (OpenCV)
-                val outputBytes = processFrameJNI(inputBytes, width, height)
+                val mode = when (currentFilter) {
+                    Filter.GRAY -> 1
+                    Filter.EDGE -> 2
+                    else -> 0
+                }
 
-                // Create bitmap from processed bytes
+                // Call native (OpenCV) processing
+                val outputBytes = processFrameJNI(inputBytes, width, height, mode)
+
+                // Create output bitmap from returned bytes
                 val outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                 outBitmap.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(outputBytes))
 
-                // Show processed frame in overlay ImageView
                 processedImage.setImageBitmap(outBitmap)
             }
-
         }
     }
 
@@ -126,23 +162,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
-            override fun onOpened(camera: CameraDevice) {
-                Log.d(TAG, "Camera opened")
-                cameraDevice = camera
-                createPreviewSession()
-            }
+        manager.openCamera(
+            cameraId,
+            object : CameraDevice.StateCallback() {
+                override fun onOpened(camera: CameraDevice) {
+                    Log.d(TAG, "Camera opened")
+                    cameraDevice = camera
+                    createPreviewSession()
+                }
 
-            override fun onDisconnected(camera: CameraDevice) {
-                Log.e(TAG, "Camera disconnected")
-                camera.close()
-            }
+                override fun onDisconnected(camera: CameraDevice) {
+                    Log.e(TAG, "Camera disconnected")
+                    camera.close()
+                }
 
-            override fun onError(camera: CameraDevice, error: Int) {
-                Log.e(TAG, "Camera error: $error")
-                camera.close()
-            }
-        }, null)
+                override fun onError(camera: CameraDevice, error: Int) {
+                    Log.e(TAG, "Camera error: $error")
+                    camera.close()
+                }
+            },
+            null
+        )
     }
 
     private fun createPreviewSession() {
@@ -162,24 +202,30 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val requestBuilder = camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-        requestBuilder.addTarget(surface)
+        val requestBuilder =
+            camera.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                addTarget(surface)
+            }
 
-        camera.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
-            override fun onConfigured(session: CameraCaptureSession) {
-                Log.d(TAG, "CaptureSession configured")
-                captureSession = session
-                try {
-                    captureSession?.setRepeatingRequest(requestBuilder.build(), null, null)
-                } catch (e: CameraAccessException) {
-                    Log.e(TAG, "CameraAccessException in setRepeatingRequest: ${e.message}")
+        camera.createCaptureSession(
+            listOf(surface),
+            object : CameraCaptureSession.StateCallback() {
+                override fun onConfigured(session: CameraCaptureSession) {
+                    Log.d(TAG, "CaptureSession configured")
+                    captureSession = session
+                    try {
+                        captureSession?.setRepeatingRequest(requestBuilder.build(), null, null)
+                    } catch (e: CameraAccessException) {
+                        Log.e(TAG, "CameraAccessException in setRepeatingRequest: ${e.message}")
+                    }
                 }
-            }
 
-            override fun onConfigureFailed(session: CameraCaptureSession) {
-                Log.e(TAG, "CaptureSession configuration failed")
-            }
-        }, null)
+                override fun onConfigureFailed(session: CameraCaptureSession) {
+                    Log.e(TAG, "CaptureSession configuration failed")
+                }
+            },
+            null
+        )
     }
 
     override fun onRequestPermissionsResult(
@@ -197,7 +243,6 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Log.e(TAG, "Camera permission denied")
                 Toast.makeText(this, "Camera permission is required", Toast.LENGTH_LONG).show()
-                // Don’t finish() for now, so we can see logs
             }
         }
     }
@@ -209,3 +254,4 @@ class MainActivity : AppCompatActivity() {
         cameraDevice?.close()
     }
 }
+
