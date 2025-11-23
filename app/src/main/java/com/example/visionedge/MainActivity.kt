@@ -14,6 +14,7 @@ import android.view.Surface
 import android.view.TextureView
 import android.widget.Button
 import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -23,6 +24,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var textureView: TextureView
     private lateinit var processedImage: ImageView
+    private lateinit var modeLabel: TextView
+
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
 
@@ -53,24 +56,31 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "onCreate called")
         setContentView(R.layout.activity_main)
 
+        modeLabel = findViewById(R.id.txtMode)
         textureView = findViewById(R.id.textureView)
         processedImage = findViewById(R.id.processedImage)
+
+        modeLabel.text = "Mode: EDGE"
 
         // Filter buttons
         findViewById<Button>(R.id.btnOriginal).setOnClickListener {
             currentFilter = Filter.ORIGINAL
-        }
-        findViewById<Button>(R.id.btnGray).setOnClickListener {
-            currentFilter = Filter.GRAY
-        }
-        findViewById<Button>(R.id.btnEdge).setOnClickListener {
-            currentFilter = Filter.EDGE
+            modeLabel.text = "Mode: ORIGINAL"
         }
 
-        if (!::textureView.isInitialized) {
-            Toast.makeText(this, "textureView not found in layout!", Toast.LENGTH_LONG).show()
-            Log.e(TAG, "textureView is not initialized. Check activity_main.xml IDs.")
-            return
+        findViewById<Button>(R.id.btnGray).setOnClickListener {
+            currentFilter = Filter.GRAY
+            modeLabel.text = "Mode: GRAYSCALE"
+        }
+
+        findViewById<Button>(R.id.btnEdge).setOnClickListener {
+            currentFilter = Filter.EDGE
+            modeLabel.text = "Mode: EDGE"
+        }
+
+        // Capture button
+        findViewById<Button>(R.id.btnCapture).setOnClickListener {
+            captureCurrentFrame()
         }
 
         // Permission check
@@ -105,8 +115,7 @@ class MainActivity : AppCompatActivity() {
                 surface: SurfaceTexture,
                 width: Int,
                 height: Int
-            ) {
-            }
+            ) { }
 
             override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
                 Log.d(TAG, "SurfaceTexture destroyed")
@@ -228,6 +237,44 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun captureCurrentFrame() {
+        // Grab bitmap from the processedImage ImageView
+        processedImage.isDrawingCacheEnabled = true
+        processedImage.buildDrawingCache()
+        val bitmap = processedImage.drawingCache
+
+        if (bitmap == null) {
+            Toast.makeText(this, "No frame to capture yet", Toast.LENGTH_SHORT).show()
+            processedImage.isDrawingCacheEnabled = false
+            return
+        }
+
+        try {
+            val picturesDir = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES)
+            if (picturesDir == null) {
+                Toast.makeText(this, "Cannot access pictures directory", Toast.LENGTH_SHORT).show()
+                processedImage.isDrawingCacheEnabled = false
+                return
+            }
+
+            val fileName = "visionedge_${System.currentTimeMillis()}.png"
+            val file = java.io.File(picturesDir, fileName)
+
+            val outputStream = java.io.FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            outputStream.flush()
+            outputStream.close()
+
+            Log.d(TAG, "Saved frame to: ${file.absolutePath}")
+            Toast.makeText(this, "Saved: ${file.name}", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving frame: ${e.message}")
+            Toast.makeText(this, "Error saving frame", Toast.LENGTH_SHORT).show()
+        } finally {
+            processedImage.isDrawingCacheEnabled = false
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -254,4 +301,3 @@ class MainActivity : AppCompatActivity() {
         cameraDevice?.close()
     }
 }
-
