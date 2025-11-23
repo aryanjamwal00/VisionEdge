@@ -56,10 +56,12 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "onCreate called")
         setContentView(R.layout.activity_main)
 
+        // View references
         modeLabel = findViewById(R.id.txtMode)
         textureView = findViewById(R.id.textureView)
         processedImage = findViewById(R.id.processedImage)
 
+        // Default mode
         modeLabel.text = "Mode: EDGE"
 
         // Filter buttons
@@ -115,7 +117,9 @@ class MainActivity : AppCompatActivity() {
                 surface: SurfaceTexture,
                 width: Int,
                 height: Int
-            ) { }
+            ) {
+                // No-op
+            }
 
             override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
                 Log.d(TAG, "SurfaceTexture destroyed")
@@ -123,10 +127,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-                // Get current frame as Bitmap
                 val bitmap = textureView.bitmap ?: return
 
-                // If ORIGINAL filter, just show the camera frame
+                // ORIGINAL mode: just show camera frame, no JNI call
                 if (currentFilter == Filter.ORIGINAL) {
                     processedImage.setImageBitmap(bitmap)
                     return
@@ -135,7 +138,6 @@ class MainActivity : AppCompatActivity() {
                 val width = bitmap.width
                 val height = bitmap.height
 
-                // Convert Bitmap (ARGB_8888) to byte array
                 val bufferSize = width * height * 4
                 val buffer = java.nio.ByteBuffer.allocate(bufferSize)
                 bitmap.copyPixelsToBuffer(buffer)
@@ -147,13 +149,10 @@ class MainActivity : AppCompatActivity() {
                     else -> 0
                 }
 
-                // Call native (OpenCV) processing
                 val outputBytes = processFrameJNI(inputBytes, width, height, mode)
 
-                // Create output bitmap from returned bytes
                 val outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                 outBitmap.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(outputBytes))
-
                 processedImage.setImageBitmap(outBitmap)
             }
         }
