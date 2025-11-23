@@ -39,3 +39,28 @@ The goal of this project is to:
 
 ## 📂 Project Structure
 
+## 🎮 Runtime Controls
+
+The VisionEdge app supports real-time filter switching:
+
+- **Original** – shows the raw camera feed.
+- **Grayscale** – displays frames converted to gray via OpenCV.
+- **Edges** – shows Canny edge detection over the live camera feed.
+
+The current mode is always visible at the top-left overlay label (e.g., `Mode: EDGE`).
+
+### 📸 Frame Capture
+
+- Tap the **Capture** button to save the currently processed frame.
+- Captured images are stored under the app's pictures directory:
+
+  `Android/data/com.example.visionedge/files/Pictures/visionedge_<timestamp>.png`
+
+This is implemented using `getExternalFilesDir(Environment.DIRECTORY_PICTURES)` so no additional storage permission is needed on recent Android versions.
+
+## 🧪 How to Demo
+
+1. Install the app via Android Studio on an emulator or physical device.
+2. Grant **Camera** permission on first launch.
+3. Switch between **Original / Grayscale / Edges** using the bottom controls.
+4. Tap **Capture** to persist any interesting processed frame to disk.
