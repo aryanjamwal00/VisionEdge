@@ -13,6 +13,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.graphics.Bitmap
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -86,8 +88,29 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-                // Later we'll grab frame here for processing
+                // Grab current frame as Bitmap
+                val bitmap = textureView.bitmap ?: return
+
+                val width = bitmap.width
+                val height = bitmap.height
+
+                // Allocate byte buffer for ARGB_8888
+                val bufferSize = width * height * 4
+                val buffer = java.nio.ByteBuffer.allocate(bufferSize)
+                bitmap.copyPixelsToBuffer(buffer)
+                val inputBytes = buffer.array()
+
+                // Call native processing (OpenCV)
+                val outputBytes = processFrameJNI(inputBytes, width, height)
+
+                // Create bitmap from processed bytes
+                val outBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                outBitmap.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(outputBytes))
+
+                // Show processed frame in overlay ImageView
+                processedImage.setImageBitmap(outBitmap)
             }
+
         }
     }
 
