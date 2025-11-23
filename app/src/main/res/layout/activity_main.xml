@@ -7,6 +7,19 @@
     android:background="#000000"
     tools:context=".MainActivity">
 
+    <!-- Mode label at top-left -->
+    <TextView
+        android:id="@+id/txtMode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentStart="true"
+        android:layout_margin="8dp"
+        android:text="Mode: EDGE"
+        android:textColor="@android:color/white"
+        android:background="#80000000"
+        android:padding="4dp" />
+
     <!-- Camera preview -->
     <TextureView
         android:id="@+id/textureView"
@@ -21,6 +34,7 @@
         android:scaleType="centerCrop" />
 
     <!-- Controls at bottom -->
+    <!-- Filter buttons at bottom + Capture -->
     <LinearLayout
         android:id="@+id/bottomBar"
         android:layout_width="match_parent"
@@ -54,6 +68,15 @@
             android:text="Edges"
             android:layout_margin="8dp"
             android:textColor="@android:color/white" />
+
+        <Button
+            android:id="@+id/btnCapture"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Capture"
+            android:layout_margin="8dp"
+            android:textColor="@android:color/white" />
     </LinearLayout>
+
 
 </RelativeLayout>
